@@ -10,9 +10,9 @@ using Verse;
 namespace PerformancePatches.Hediffs
 {
 	[StaticConstructorOnStartup]
-	internal static class GlobalHealthTracker
+	internal static class Manager
 	{
-		private static Dictionary<Pawn_HealthTracker, InstancedHealthTracker> s_trackers = new Dictionary<Pawn_HealthTracker, InstancedHealthTracker>();
+		private static Dictionary<Pawn_HealthTracker, Instanced> s_trackers = new Dictionary<Pawn_HealthTracker, Instanced>();
 
 		public static void InvalidateCache()
 		{
@@ -45,7 +45,7 @@ namespace PerformancePatches.Hediffs
 		public static void TickTracker(Pawn_HealthTracker tracker)
 		{
 			if (!s_trackers.TryGetValue(tracker, out var instance)) {
-				instance = new InstancedHealthTracker(tracker);
+				instance = new Instanced(tracker);
 				s_trackers.Add(tracker, instance);
 			}
 
@@ -53,7 +53,7 @@ namespace PerformancePatches.Hediffs
 		}
 	}
 
-	internal class InstancedHealthTracker
+	internal class Instanced
 	{
 		private static readonly Assembly s_vanillaAssembly = typeof(Hediff).Assembly;
 
@@ -71,14 +71,14 @@ namespace PerformancePatches.Hediffs
 
 		private int _lastRareTicked = -1;
 
-		public InstancedHealthTracker(Pawn_HealthTracker tracker)
+		public Instanced(Pawn_HealthTracker tracker)
 		{
 			this._tracker = tracker;
 			this._pawn = Traverse.Create(tracker).Field("pawn").GetValue<Pawn>();
 			this._immunityHandlerTick = Traverse.Create(this._tracker.immunity).Method("ImmunityHandlerTick");
 		}
 
-		private enum TickType
+		internal enum TickType
 		{
 			Always,
 
@@ -361,7 +361,7 @@ namespace PerformancePatches.Hediffs
 			}
 		}
 
-		private class HediffCache
+		internal class HediffCache
 		{
 			public readonly List<Hediff> TickAlways = new List<Hediff>();
 

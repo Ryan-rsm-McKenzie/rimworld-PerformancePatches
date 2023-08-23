@@ -13,7 +13,7 @@ namespace PerformancePatches
 		public static void Postfix()
 		{
 			if ((Find.TickManager.TicksGame % GenDate.TicksPerDay) == 0) {
-				Hediffs.GlobalHealthTracker.InvalidateCache();
+				Hediffs.Manager.InvalidateCache();
 			}
 		}
 	}

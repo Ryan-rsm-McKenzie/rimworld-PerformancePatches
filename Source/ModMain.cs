@@ -20,7 +20,7 @@ namespace PerformancePatches
 			public override void ExposeData()
 			{
 				if (Scribe.mode == LoadSaveMode.LoadingVars) {
-					Hediffs.GlobalHealthTracker.InvalidateCache();
+					Hediffs.Manager.InvalidateCache();
 				}
 			}
 		}

@@ -13,7 +13,7 @@ namespace PerformancePatches.Hediffs
 	{
 		public static void Postfix(Pawn_HealthTracker __instance)
 		{
-			GlobalHealthTracker.InvalidateTracker(__instance);
+			Manager.InvalidateTracker(__instance);
 		}
 	}
 
@@ -24,7 +24,7 @@ namespace PerformancePatches.Hediffs
 	{
 		public static bool Prefix(Pawn_HealthTracker __instance)
 		{
-			GlobalHealthTracker.TickTracker(__instance);
+			Manager.TickTracker(__instance);
 			return false;
 		}
 	}
@@ -36,7 +36,7 @@ namespace PerformancePatches.Hediffs
 	{
 		public static void Postfix(Pawn_HealthTracker __instance)
 		{
-			GlobalHealthTracker.InvalidateTracker(__instance);
+			Manager.InvalidateTracker(__instance);
 		}
 	}
 }
