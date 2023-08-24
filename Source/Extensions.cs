@@ -5,11 +5,6 @@ namespace PerformancePatches
 {
 	internal static class IEnumerableExt
 	{
-		public static bool Empty<T>(this IEnumerable<T> self)
-		{
-			return !self.GetEnumerator().MoveNext();
-		}
-
 		public static IEnumerable<T> Flatten<T>(this IEnumerable<IEnumerable<T>> source)
 		{
 			foreach (var outer in source) {

@@ -276,7 +276,7 @@ namespace PerformancePatches.Hediffs
 
 		private bool TickNaturalHealing(float healingFactor, IEnumerable<Hediff_Injury> injuries)
 		{
-			if (!injuries.Empty()) {
+			if (injuries.Any()) {
 				float healing = 8;
 
 				if (this._pawn.GetPosture() != PawnPosture.Standing) {
@@ -349,7 +349,7 @@ namespace PerformancePatches.Hediffs
 
 		private bool TickTendedHealing(float healingFactor, IEnumerable<Hediff_Injury> injuries)
 		{
-			if (!injuries.Empty() && !this._pawn.Starving()) {
+			if (injuries.Any() && !this._pawn.Starving()) {
 				var injury = injuries.RandomElement();
 				float quality = injury.TryGetComp<HediffComp_TendDuration>().tendQuality;
 				float healing = GenMath.LerpDouble(0f, 1f, 0.5f, 1.5f, Mathf.Clamp01(quality));
