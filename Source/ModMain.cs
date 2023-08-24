@@ -21,6 +21,7 @@ namespace PerformancePatches
 			{
 				if (Scribe.mode == LoadSaveMode.LoadingVars) {
 					Hediffs.Manager.InvalidateCache();
+					Precepts.Manager.InvalidateCache();
 				}
 			}
 		}

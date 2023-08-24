@@ -14,6 +14,7 @@ namespace PerformancePatches
 		{
 			if ((Find.TickManager.TicksGame % GenDate.TicksPerDay) == 0) {
 				Hediffs.Manager.InvalidateCache();
+				Precepts.Manager.InvalidateCache();
 			}
 		}
 	}

@@ -10,6 +10,15 @@ namespace PerformancePatches
 			return !self.GetEnumerator().MoveNext();
 		}
 
+		public static IEnumerable<T> Flatten<T>(this IEnumerable<IEnumerable<T>> source)
+		{
+			foreach (var outer in source) {
+				foreach (var inner in outer) {
+					yield return inner;
+				}
+			}
+		}
+
 		public static void ForEach<T>(this IEnumerable<T> self, Action<T> f)
 		{
 			foreach (var elem in self) {
