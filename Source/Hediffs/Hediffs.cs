@@ -16,8 +16,7 @@ namespace PerformancePatches.Hediffs
 
 		public static void InvalidateCache()
 		{
-			var existing = Find.Maps?
-				.SelectMany((map) => map.mapPawns.AllPawns)
+			var existing = Utils.AllPawnsTicking()
 				.Select((pawn) => pawn.health)
 				.ToHashSet();
 			if (existing != null) {
