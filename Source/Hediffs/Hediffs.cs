@@ -189,9 +189,9 @@ namespace PerformancePatches.Hediffs
 		private void RecalculateIfNeeded()
 		{
 			if (this._dirty) {
-				this._lastRareTicked = -1;
 				this.RecalculateHediffs();
 				this.RecalculateBleedRate();
+				this._lastRareTicked = UnityEngine.Random.Range(0, this._hediffs.TickRarely.Count) - 1;
 				this._dirty = false;
 			}
 		}
