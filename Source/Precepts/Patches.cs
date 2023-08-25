@@ -10,6 +10,17 @@ using Verse;
 namespace PerformancePatches.Precepts
 {
 	[HarmonyPatch(typeof(Ideo))]
+	[HarmonyPatch("AddPrecept")]
+	[HarmonyPatch(new Type[] { typeof(Precept), typeof(bool), typeof(FactionDef), typeof(RitualPatternDef) })]
+	internal class Ideo_AddPrecept
+	{
+		public static void Postfix(Precept precept)
+		{
+			Manager.InvalidatePrecept(precept, Insertion.Added);
+		}
+	}
+
+	[HarmonyPatch(typeof(Ideo))]
 	[HarmonyPatch("IdeoTick")]
 	[HarmonyPatch(new Type[] { })]
 	internal class Ideo_IdeoTick
@@ -30,14 +41,25 @@ namespace PerformancePatches.Precepts
 		}
 	}
 
+	[HarmonyPatch(typeof(Ideo))]
+	[HarmonyPatch("RemovePrecept")]
+	[HarmonyPatch(new Type[] { typeof(Precept), typeof(bool) })]
+	internal class Ideo_RemovePrecept
+	{
+		public static void Postfix(Precept precept)
+		{
+			Manager.InvalidatePrecept(precept, Insertion.Removed);
+		}
+	}
+
 	[HarmonyPatch(typeof(IdeoManager))]
 	[HarmonyPatch("Add")]
 	[HarmonyPatch(new Type[] { typeof(Ideo) })]
 	internal class IdeoManager_Add
 	{
-		public static void Postfix()
+		public static void Postfix(Ideo ideo)
 		{
-			Manager.InvalidateCache();
+			Manager.InvalidateIdeo(ideo, Insertion.Removed);
 		}
 	}
 
@@ -57,9 +79,9 @@ namespace PerformancePatches.Precepts
 	[HarmonyPatch(new Type[] { typeof(Ideo) })]
 	internal class IdeoManager_Remove
 	{
-		public static void Postfix()
+		public static void Postfix(Ideo ideo)
 		{
-			Manager.InvalidateCache();
+			Manager.InvalidateIdeo(ideo, Insertion.Removed);
 		}
 	}
 
@@ -68,9 +90,9 @@ namespace PerformancePatches.Precepts
 	[HarmonyPatch(new Type[] { typeof(Pawn) })]
 	internal class MapPawns_DeRegisterPawn
 	{
-		public static void Postfix()
+		public static void Postfix(Pawn p)
 		{
-			Manager.InvalidateCache();
+			Manager.InvalidatePawn(p, Insertion.Removed);
 		}
 	}
 
@@ -79,9 +101,9 @@ namespace PerformancePatches.Precepts
 	[HarmonyPatch(new Type[] { typeof(Pawn) })]
 	internal class MapPawns_RegisterPawn
 	{
-		public static void Postfix()
+		public static void Postfix(Pawn p)
 		{
-			Manager.InvalidateCache();
+			Manager.InvalidatePawn(p, Insertion.Added);
 		}
 	}
 }
