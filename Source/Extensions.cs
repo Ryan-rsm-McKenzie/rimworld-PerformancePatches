@@ -31,12 +31,4 @@ namespace PerformancePatches
 			}
 		}
 	}
-
-	internal static class ListExt
-	{
-		public static List<T> Clone<T>(this List<T> list)
-		{
-			return new List<T>(list);
-		}
-	}
 }
