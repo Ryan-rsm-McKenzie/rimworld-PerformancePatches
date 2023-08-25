@@ -1,4 +1,6 @@
-﻿using System;
+﻿#pragma warning disable IDE1006 // Naming Styles
+
+using System;
 using HarmonyLib;
 using RimWorld;
 using Verse;
