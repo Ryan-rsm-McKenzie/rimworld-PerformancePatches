@@ -88,7 +88,7 @@ namespace PerformancePatches.Hediffs
 
 		private bool Dead => this._tracker.Dead;
 
-		private List<Hediff> Hediffs {
+		private IList<Hediff> Hediffs {
 			get {
 				this.RecalculateIfNeeded();
 				return this._hediffs.TickAlways;
@@ -97,7 +97,7 @@ namespace PerformancePatches.Hediffs
 
 		private bool IsFlesh => this._pawn.RaceProps.IsFlesh;
 
-		private List<Hediff> RareHediffs {
+		private IList<Hediff> RareHediffs {
 			get {
 				this.RecalculateIfNeeded();
 				return this._hediffs.TickRarely;
