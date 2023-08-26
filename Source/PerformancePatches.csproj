@@ -51,6 +51,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Bugfixes\Patches.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="Hediffs\Hediffs.cs" />
     <Compile Include="ModMain.cs" />
