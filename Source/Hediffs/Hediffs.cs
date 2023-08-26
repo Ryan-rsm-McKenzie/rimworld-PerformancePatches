@@ -84,6 +84,13 @@ namespace PerformancePatches.Hediffs
 			Rarely,
 		}
 
+		private IEnumerable<Hediff> AllHediffs {
+			get {
+				this.RecalculateIfNeeded();
+				return this._hediffs.TickAlways.Concat(this._hediffs.TickRarely);
+			}
+		}
+
 		private float BleedRateTotal => this._bleedRate;
 
 		private bool Dead => this._tracker.Dead;
@@ -135,7 +142,7 @@ namespace PerformancePatches.Hediffs
 
 		private bool HasHediffsNeedingTendByPlayer()
 		{
-			if (this.Hediffs.Any((x) => x.TendableNow())) {
+			if (this.AllHediffs.Any((x) => x.TendableNow())) {
 				if (this._pawn.NonHumanlikeOrWildMan()) {
 					if (this._pawn.Faction == Faction.OfPlayer) {
 						return true;
@@ -198,7 +205,7 @@ namespace PerformancePatches.Hediffs
 
 		private void RemoveHediffs()
 		{
-			foreach (var hediff in this.Hediffs) {
+			foreach (var hediff in this.AllHediffs) {
 				if (hediff.ShouldRemove) {
 					this._tracker.RemoveHediff(hediff);
 				}
@@ -233,7 +240,7 @@ namespace PerformancePatches.Hediffs
 		{
 			if (this.IsFlesh && this._pawn.IsHashIntervalTick(600) && !this._pawn.Starving()) {
 				float healingFactor = this._pawn.GetStatValue(StatDefOf.InjuryHealingFactor) * 0.01f * this._pawn.HealthScale;
-				var injuries = this.Hediffs.SelectNotNull((x) => x as Hediff_Injury);
+				var injuries = this.AllHediffs.SelectNotNull((x) => x as Hediff_Injury);
 				bool healed = false;
 				healed = this.TickNaturalHealing(healingFactor, injuries.Where((x) => x.CanHealNaturally())) || healed;
 				healed = this.TickTendedHealing(healingFactor, injuries.Where((x) => x.CanHealFromTending())) || healed;
@@ -284,7 +291,7 @@ namespace PerformancePatches.Hediffs
 					healing += this._pawn.CurrentBed()?.def.building.bed_healPerDay ?? 0;
 				}
 
-				foreach (var hediff in this.Hediffs) {
+				foreach (var hediff in this.AllHediffs) {
 					var stage = hediff.CurStage;
 					if ((stage?.naturalHealingFactor ?? -1) != -1) {
 						healing *= stage.naturalHealingFactor;
