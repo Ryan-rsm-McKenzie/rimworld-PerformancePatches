@@ -25,19 +25,36 @@ namespace PerformancePatches.Precepts
 	[HarmonyPatch(new Type[] { })]
 	internal class Ideo_IdeoTick
 	{
-		public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> _, ILGenerator generator)
+		public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
 		{
-			var ret = generator.DefineLabel();
-			return new CodeInstruction[] {
-				new CodeInstruction(OpCodes.Ldarg_0),
-				CodeInstruction.LoadField(typeof(Ideo), "colonistBelieverCountCached"),
-				new CodeInstruction(OpCodes.Ldc_I4_M1),
-				new CodeInstruction(OpCodes.Bne_Un_S, ret),
-				new CodeInstruction(OpCodes.Ldarg_0),
-				CodeInstruction.Call(typeof(Ideo), "RecacheColonistBelieverCount", new Type[] { }),
-				new CodeInstruction(OpCodes.Pop),
-				new CodeInstruction(OpCodes.Ret) { labels = new List<Label>(){ ret } },
+			var previous = new CodeMatch[] {
+				new CodeMatch(OpCodes.Ldc_I4_0),
+				new CodeMatch(OpCodes.Stloc_0),
+				new CodeMatch(OpCodes.Br_S),
+				new CodeMatch(OpCodes.Ldarg_0),
+				new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Ideo), "precepts")),
+				new CodeMatch(OpCodes.Ldloc_0),
+				new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(List<Precept>), "get_Item", new Type[] { typeof(int) })),
+				new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Precept), "Tick", new Type[] { })),
+				new CodeMatch(OpCodes.Ldloc_0),
+				new CodeMatch(OpCodes.Ldc_I4_1),
+				new CodeMatch(OpCodes.Add),
+				new CodeMatch(OpCodes.Stloc_0),
+				new CodeMatch(OpCodes.Ldloc_0),
+				new CodeMatch(OpCodes.Ldarg_0),
+				new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Ideo), "precepts")),
+				new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(List<Precept>), "get_Count", new Type[] { })),
+				new CodeMatch(OpCodes.Blt_S),
 			};
+
+			var matcher = new CodeMatcher(instructions);
+			matcher.MatchStartForward(previous);
+			if (matcher.IsValid) {
+				matcher.RemoveInstructions(previous.Length);
+				instructions = matcher.Instructions();
+			}
+
+			return instructions;
 		}
 	}
 
