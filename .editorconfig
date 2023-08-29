@@ -10,6 +10,8 @@ insert_final_newline = false
 # Dotnet code style settings:
 [*.{cs,vb}]
 
+dotnet_style_readonly_field = true:error
+
 # Sort using and Import directives with System.* appearing first
 dotnet_sort_system_directives_first = true
 dotnet_separate_import_directive_groups = false

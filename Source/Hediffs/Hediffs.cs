@@ -12,7 +12,7 @@ namespace PerformancePatches.Hediffs
 	[StaticConstructorOnStartup]
 	internal static class Manager
 	{
-		private static Dictionary<Pawn_HealthTracker, Instanced> s_trackers = new Dictionary<Pawn_HealthTracker, Instanced>();
+		private static readonly Dictionary<Pawn_HealthTracker, Instanced> s_trackers = new Dictionary<Pawn_HealthTracker, Instanced>();
 
 		public static void InvalidateCache()
 		{

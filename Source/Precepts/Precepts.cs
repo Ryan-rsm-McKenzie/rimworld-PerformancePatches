@@ -15,11 +15,11 @@ namespace PerformancePatches.Precepts
 	[StaticConstructorOnStartup]
 	internal static class Manager
 	{
+		private static readonly DirtyCache s_dirty = new DirtyCache();
+
 		private static readonly Dictionary<Ideo, HashSet<Pawn>> s_ideos = new Dictionary<Ideo, HashSet<Pawn>>();
 
-		private static DirtyCache s_dirty = new DirtyCache();
-
-		private static List<Precept> s_precepts = new List<Precept>();
+		private static readonly List<Precept> s_precepts = new List<Precept>();
 
 		private static List<Precept> Precepts {
 			get {
