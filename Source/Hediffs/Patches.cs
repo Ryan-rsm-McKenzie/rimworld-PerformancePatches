@@ -1,6 +1,8 @@
 ﻿#pragma warning disable IDE1006 // Naming Styles
 
 using System;
+using System.Collections.Generic;
+using System.Reflection.Emit;
 using HarmonyLib;
 using Verse;
 
@@ -22,10 +24,15 @@ namespace PerformancePatches.Hediffs
 	[HarmonyPatch(new Type[] { })]
 	internal class Pawn_HealthTracker_HealthTick
 	{
-		public static bool Prefix(Pawn_HealthTracker __instance)
+		[HarmonyPriority(Priority.Last)]
+		public static void Prefix(Pawn_HealthTracker __instance)
 		{
 			Manager.TickTracker(__instance);
-			return false;
+		}
+
+		public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> _)
+		{
+			yield return new CodeInstruction(OpCodes.Ret);
 		}
 	}
 
