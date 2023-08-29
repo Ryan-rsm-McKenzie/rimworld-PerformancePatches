@@ -28,8 +28,13 @@ namespace PerformancePatches.Precepts
 			}
 		}
 
-		public static void InvalidateCache()
+		public static void InvalidateCache(bool force = false)
 		{
+			if (force) {
+				s_ideos.Clear();
+				s_precepts.Clear();
+			}
+
 			s_dirty.Ideos = true;
 			s_dirty.Precepts = true;
 		}

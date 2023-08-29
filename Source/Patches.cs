@@ -4,9 +4,22 @@ using System;
 using HarmonyLib;
 using RimWorld;
 using Verse;
+using Verse.Profile;
 
 namespace PerformancePatches
 {
+	[HarmonyPatch(typeof(MemoryUtility))]
+	[HarmonyPatch("ClearAllMapsAndWorld")]
+	[HarmonyPatch(new Type[] { })]
+	internal class MemoryUtility_ClearAllMapsAndWorld
+	{
+		public static void Prefix()
+		{
+			Hediffs.Manager.InvalidateCache(true);
+			Precepts.Manager.InvalidateCache(true);
+		}
+	}
+
 	[HarmonyPatch(typeof(TickManager))]
 	[HarmonyPatch("DoSingleTick")]
 	[HarmonyPatch(new Type[] { })]

@@ -14,8 +14,13 @@ namespace PerformancePatches.Hediffs
 	{
 		private static readonly Dictionary<Pawn_HealthTracker, Instanced> s_trackers = new Dictionary<Pawn_HealthTracker, Instanced>();
 
-		public static void InvalidateCache()
+		public static void InvalidateCache(bool force = false)
 		{
+			if (force) {
+				s_trackers.Clear();
+				return;
+			}
+
 			var existing = Utils.AllPawnsTicking()
 				.Select((pawn) => pawn.health)
 				.ToHashSet();
