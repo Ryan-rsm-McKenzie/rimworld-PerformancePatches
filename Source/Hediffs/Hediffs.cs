@@ -58,8 +58,6 @@ namespace PerformancePatches.Hediffs
 
 		private readonly HediffCache _hediffs = new HediffCache();
 
-		private readonly Traverse _immunityHandlerTick;
-
 		private readonly Pawn _pawn;
 
 		private readonly Pawn_HealthTracker _tracker;
@@ -73,8 +71,7 @@ namespace PerformancePatches.Hediffs
 		public Instanced(Pawn_HealthTracker tracker)
 		{
 			this._tracker = tracker;
-			this._pawn = Traverse.Create(tracker).Field("pawn").GetValue<Pawn>();
-			this._immunityHandlerTick = Traverse.Create(this._tracker.immunity).Method("ImmunityHandlerTick");
+			this._pawn = tracker.pawn;
 		}
 
 		internal enum TickType
@@ -278,7 +275,7 @@ namespace PerformancePatches.Hediffs
 
 		private void TickImmunity()
 		{
-			this._immunityHandlerTick.GetValue(new object[] { });
+			this._tracker.immunity.ImmunityHandlerTick();
 		}
 
 		private bool TickNaturalHealing(float healingFactor, IEnumerable<Hediff_Injury> injuries)
