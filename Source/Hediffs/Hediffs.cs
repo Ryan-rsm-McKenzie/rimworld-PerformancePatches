@@ -23,7 +23,7 @@ namespace PerformancePatches.Hediffs
 			var existing = Utils.AllPawnsTicking()
 				.Select((pawn) => pawn.health)
 				.ToHashSet();
-			if (existing != null) {
+			if (existing.Any()) {
 				var missing = s_trackers.Keys
 					.Where((k) => !existing.Contains(k))
 					.ToList();
