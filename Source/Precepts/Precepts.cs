@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using RimWorld;
 using Verse;
@@ -19,24 +20,21 @@ namespace PerformancePatches.Precepts
 
 		private static readonly Dictionary<Ideo, HashSet<Pawn>> s_ideos = new Dictionary<Ideo, HashSet<Pawn>>();
 
-		private static readonly List<Precept> s_precepts = new List<Precept>();
+		private static readonly ObligationCache s_obligations = new ObligationCache();
 
-		private static List<Precept> Precepts {
-			get {
-				RecalculateIfNeeded();
-				return s_precepts;
-			}
-		}
+		private static readonly List<Precept> s_precepts = new List<Precept>();
 
 		public static void InvalidateCache(bool force = false)
 		{
 			if (force) {
 				s_ideos.Clear();
 				s_precepts.Clear();
+				s_obligations.Clear();
 			}
 
 			s_dirty.Ideos = true;
 			s_dirty.Precepts = true;
+			s_dirty.Obligations = true;
 		}
 
 		public static void InvalidateIdeo(Ideo ideo, Insertion insertion)
@@ -61,6 +59,13 @@ namespace PerformancePatches.Precepts
 					s_ideos.Remove(ideo);
 					s_dirty.Precepts = true;
 					break;
+			}
+		}
+
+		public static void InvalidateObligation(RitualObligation obligation, Insertion _)
+		{
+			if (s_ideos.ContainsKey(obligation.precept.ideo)) {
+				s_dirty.Obligations = true;
 			}
 		}
 
@@ -101,9 +106,9 @@ namespace PerformancePatches.Precepts
 
 		public static void Tick()
 		{
-			foreach (var precept in Precepts) {
-				precept.Tick();
-			}
+			RecalculateIfNeeded();
+			TickPrecepts();
+			TickObligations();
 		}
 
 		private static void RecalculateIdeosIfNeeded()
@@ -122,13 +127,39 @@ namespace PerformancePatches.Precepts
 		{
 			RecalculateIdeosIfNeeded();
 			RecalculatePreceptsIfNeeded();
+			RecalculateObligationsIfNeeded();
+		}
+
+		private static void RecalculateObligationsIfNeeded()
+		{
+			if (s_dirty.Obligations) {
+				s_obligations.Clear();
+
+				var t = typeof(Precept_Ritual);
+				var rituals = s_ideos.Keys
+					.SelectMany((ideo) => ideo.PreceptsListForReading)
+					.Where((precept) => precept.GetType() == t) // don't include custom types that derive from Precept_Ritual
+					.Distinct()
+					.Cast<Precept_Ritual>();
+
+				var obligations = rituals
+					.SelectNotNull((ritual) => ritual.activeObligations)
+					.Flatten();
+				var triggers = rituals
+					.SelectNotNull((ritual) => ritual.obligationTriggers)
+					.Flatten();
+
+				s_obligations.Active.AddRange(obligations);
+				s_obligations.Triggers.AddRange(triggers);
+
+				s_dirty.Obligations = false;
+			}
 		}
 
 		private static void RecalculatePreceptsIfNeeded()
 		{
 			if (s_dirty.Precepts) {
 				var vanilla = typeof(Ideo).Assembly;
-				var ritual = typeof(Precept_Ritual);
 				var role = typeof(Precept_Role);
 
 				s_precepts.Clear();
@@ -137,11 +168,37 @@ namespace PerformancePatches.Precepts
 					.Distinct()
 					.Where((precept) => {
 						var type = precept.GetType();
-						return type.Assembly != vanilla || type == ritual || type == role;
+						return type.Assembly != vanilla || type == role;
 					});
 				s_precepts.AddRange(precepts);
 
 				s_dirty.Precepts = false;
+				s_dirty.Obligations = true;
+			}
+		}
+
+		private static void TickObligations()
+		{
+			foreach (var obligation in s_obligations.Active) {
+				var precept = obligation.precept;
+				if (!obligation.StillValid || !precept.obligationTargetFilter.ObligationTargetsValid(obligation)) {
+					precept.RemoveObligation(obligation);
+				}
+			}
+
+			foreach (var trigger in s_obligations.Triggers) {
+				try {
+					trigger.Tick();
+				} catch (Exception e) {
+					Log.Error($"Error while ticking a ritual obligation trigger: {e}");
+				}
+			}
+		}
+
+		private static void TickPrecepts()
+		{
+			foreach (var precept in s_precepts) {
+				precept.Tick();
 			}
 		}
 
@@ -149,7 +206,22 @@ namespace PerformancePatches.Precepts
 		{
 			public bool Ideos = true;
 
+			public bool Obligations = true;
+
 			public bool Precepts = true;
+		}
+
+		private class ObligationCache
+		{
+			public readonly List<RitualObligation> Active = new List<RitualObligation>();
+
+			public readonly List<RitualObligationTrigger> Triggers = new List<RitualObligationTrigger>();
+
+			public void Clear()
+			{
+				this.Active.Clear();
+				this.Triggers.Clear();
+			}
 		}
 	}
 }

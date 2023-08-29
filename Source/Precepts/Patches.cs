@@ -123,4 +123,26 @@ namespace PerformancePatches.Precepts
 			Manager.InvalidatePawn(p, Insertion.Added);
 		}
 	}
+
+	[HarmonyPatch(typeof(Precept_Ritual))]
+	[HarmonyPatch("AddObligation")]
+	[HarmonyPatch(new Type[] { typeof(RitualObligation) })]
+	internal class Precept_Ritual_AddObligation
+	{
+		public static void Postfix(RitualObligation obligation)
+		{
+			Manager.InvalidateObligation(obligation, Insertion.Added);
+		}
+	}
+
+	[HarmonyPatch(typeof(Precept_Ritual))]
+	[HarmonyPatch("RemoveObligation")]
+	[HarmonyPatch(new Type[] { typeof(RitualObligation), typeof(bool) })]
+	internal class Precept_Ritual_RemoveObligation
+	{
+		public static void Postfix(RitualObligation obligation)
+		{
+			Manager.InvalidateObligation(obligation, Insertion.Removed);
+		}
+	}
 }
