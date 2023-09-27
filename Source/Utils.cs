@@ -1,5 +1,8 @@
-﻿using System.Collections.Generic;
+﻿#nullable enable
+
+using System.Collections.Generic;
 using System.Linq;
+using Iterator;
 using Verse;
 
 namespace PerformancePatches
@@ -7,7 +10,7 @@ namespace PerformancePatches
 	[StaticConstructorOnStartup]
 	internal static class Utils
 	{
-		private static readonly List<Pawn> s_pawns = new List<Pawn>();
+		private static readonly List<Pawn> s_pawns = new();
 
 		private static int s_lastUpdate = -1;
 
@@ -16,7 +19,7 @@ namespace PerformancePatches
 			if (s_lastUpdate != Find.TickManager.TicksGame) {
 				s_pawns.Clear();
 				var maps = Find.Maps?
-					.SelectNotNull((map) => map.mapPawns?.AllPawns)
+					.FilterMap((map) => map.mapPawns?.AllPawns)
 					.Flatten()
 					?? Enumerable.Empty<Pawn>();
 				var caravans = Find.WorldObjects?

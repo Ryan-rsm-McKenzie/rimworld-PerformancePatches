@@ -1,7 +1,10 @@
-﻿using System;
+﻿#nullable enable
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Iterator;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -11,7 +14,7 @@ namespace PerformancePatches.Hediffs
 	[StaticConstructorOnStartup]
 	internal static class Manager
 	{
-		private static readonly Dictionary<Pawn_HealthTracker, Instanced> s_trackers = new Dictionary<Pawn_HealthTracker, Instanced>();
+		private static readonly Dictionary<Pawn_HealthTracker, Instanced> s_trackers = new();
 
 		public static void InvalidateCache(bool force = false)
 		{
@@ -60,7 +63,7 @@ namespace PerformancePatches.Hediffs
 	{
 		private static readonly Assembly s_vanillaAssembly = typeof(Hediff).Assembly;
 
-		private readonly HediffCache _hediffs = new HediffCache();
+		private readonly HediffCache _hediffs = new();
 
 		private readonly Pawn _pawn;
 
@@ -241,7 +244,7 @@ namespace PerformancePatches.Hediffs
 		{
 			if (this.IsFlesh && this._pawn.IsHashIntervalTick(600) && !this._pawn.Starving()) {
 				float healingFactor = this._pawn.GetStatValue(StatDefOf.InjuryHealingFactor) * 0.01f * this._pawn.HealthScale;
-				var injuries = this.AllHediffs.SelectNotNull((x) => x as Hediff_Injury);
+				var injuries = this.AllHediffs.FilterMap((x) => x as Hediff_Injury);
 				bool healed = false;
 				healed = this.TickNaturalHealing(healingFactor, injuries.Where((x) => x.CanHealNaturally())) || healed;
 				healed = this.TickTendedHealing(healingFactor, injuries.Where((x) => x.CanHealFromTending())) || healed;
@@ -294,7 +297,7 @@ namespace PerformancePatches.Hediffs
 
 				foreach (var hediff in this.AllHediffs) {
 					var stage = hediff.CurStage;
-					if ((stage?.naturalHealingFactor ?? -1) != -1) {
+					if (stage is not null && stage.naturalHealingFactor != -1) {
 						healing *= stage.naturalHealingFactor;
 					}
 				}
@@ -325,7 +328,7 @@ namespace PerformancePatches.Hediffs
 				.traits
 				.allTraits
 				.Where((x) => !x.Suppressed)
-				.SelectNotNull((trait) => {
+				.FilterMap((trait) => {
 					float mtb = trait.CurrentData.randomDiseaseMtbDays;
 					if (mtb > 0f && Rand.MTBEventOccurs(mtb, 60000, 60)) {
 						var biome = this._pawn.Tile != -1 ? Find.WorldGrid[this._pawn.Tile].biome : DefDatabase<BiomeDef>.GetRandom();
@@ -370,9 +373,9 @@ namespace PerformancePatches.Hediffs
 
 		internal class HediffCache
 		{
-			public readonly List<Hediff> TickAlways = new List<Hediff>();
+			public readonly List<Hediff> TickAlways = new();
 
-			public readonly List<Hediff> TickRarely = new List<Hediff>();
+			public readonly List<Hediff> TickRarely = new();
 
 			public List<Hediff> this[TickType key] => key == TickType.Rarely ? this.TickRarely : this.TickAlways;
 

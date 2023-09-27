@@ -1,4 +1,5 @@
 ﻿#pragma warning disable IDE1006 // Naming Styles
+#nullable enable
 
 using System;
 using HarmonyLib;

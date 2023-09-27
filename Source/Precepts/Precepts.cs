@@ -1,6 +1,9 @@
-﻿using System;
+﻿#nullable enable
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using Iterator;
 using RimWorld;
 using Verse;
 
@@ -16,13 +19,13 @@ namespace PerformancePatches.Precepts
 	[StaticConstructorOnStartup]
 	internal static class Manager
 	{
-		private static readonly DirtyCache s_dirty = new DirtyCache();
+		private static readonly DirtyCache s_dirty = new();
 
-		private static readonly Dictionary<Ideo, HashSet<Pawn>> s_ideos = new Dictionary<Ideo, HashSet<Pawn>>();
+		private static readonly Dictionary<Ideo, HashSet<Pawn>> s_ideos = new();
 
-		private static readonly ObligationCache s_obligations = new ObligationCache();
+		private static readonly ObligationCache s_obligations = new();
 
-		private static readonly List<Precept> s_precepts = new List<Precept>();
+		private static readonly List<Precept> s_precepts = new();
 
 		public static void InvalidateCache(bool force = false)
 		{
@@ -49,7 +52,7 @@ namespace PerformancePatches.Precepts
 
 					followers.Clear();
 					var x = Find.Maps?
-						.SelectNotNull((map) => map.mapPawns?.AllPawns)
+						.FilterMap((map) => map.mapPawns?.AllPawns)
 						.Flatten()
 						.Where((pawn) => pawn.Ideo == ideo);
 					followers.AddRange(x);
@@ -143,10 +146,10 @@ namespace PerformancePatches.Precepts
 					.Cast<Precept_Ritual>();
 
 				var obligations = rituals
-					.SelectNotNull((ritual) => ritual.activeObligations)
+					.FilterMap((ritual) => ritual.activeObligations)
 					.Flatten();
 				var triggers = rituals
-					.SelectNotNull((ritual) => ritual.obligationTriggers)
+					.FilterMap((ritual) => ritual.obligationTriggers)
 					.Flatten();
 
 				s_obligations.Active.AddRange(obligations);
@@ -213,9 +216,9 @@ namespace PerformancePatches.Precepts
 
 		private class ObligationCache
 		{
-			public readonly List<RitualObligation> Active = new List<RitualObligation>();
+			public readonly List<RitualObligation> Active = new();
 
-			public readonly List<RitualObligationTrigger> Triggers = new List<RitualObligationTrigger>();
+			public readonly List<RitualObligationTrigger> Triggers = new();
 
 			public void Clear()
 			{

@@ -1,4 +1,4 @@
-﻿#pragma warning disable IDE1006 // Naming Styles
+﻿#nullable enable
 
 using System;
 using System.Collections.Generic;
@@ -28,23 +28,23 @@ namespace PerformancePatches.Precepts
 		public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
 		{
 			var previous = new CodeMatch[] {
-				new CodeMatch(OpCodes.Ldc_I4_0),
-				new CodeMatch(OpCodes.Stloc_0),
-				new CodeMatch(OpCodes.Br_S),
-				new CodeMatch(OpCodes.Ldarg_0),
-				new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Ideo), "precepts")),
-				new CodeMatch(OpCodes.Ldloc_0),
-				new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(List<Precept>), "get_Item", new Type[] { typeof(int) })),
-				new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(Precept), "Tick", new Type[] { })),
-				new CodeMatch(OpCodes.Ldloc_0),
-				new CodeMatch(OpCodes.Ldc_I4_1),
-				new CodeMatch(OpCodes.Add),
-				new CodeMatch(OpCodes.Stloc_0),
-				new CodeMatch(OpCodes.Ldloc_0),
-				new CodeMatch(OpCodes.Ldarg_0),
-				new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Ideo), "precepts")),
-				new CodeMatch(OpCodes.Callvirt, AccessTools.Method(typeof(List<Precept>), "get_Count", new Type[] { })),
-				new CodeMatch(OpCodes.Blt_S),
+				new(OpCodes.Ldc_I4_0),
+				new(OpCodes.Stloc_0),
+				new(OpCodes.Br_S),
+				new(OpCodes.Ldarg_0),
+				new(OpCodes.Ldfld, AccessTools.Field(typeof(Ideo), "precepts")),
+				new(OpCodes.Ldloc_0),
+				new(OpCodes.Callvirt, AccessTools.Method(typeof(List<Precept>), "get_Item", new Type[] { typeof(int) })),
+				new(OpCodes.Callvirt, AccessTools.Method(typeof(Precept), "Tick", new Type[] { })),
+				new(OpCodes.Ldloc_0),
+				new(OpCodes.Ldc_I4_1),
+				new(OpCodes.Add),
+				new(OpCodes.Stloc_0),
+				new(OpCodes.Ldloc_0),
+				new(OpCodes.Ldarg_0),
+				new(OpCodes.Ldfld, AccessTools.Field(typeof(Ideo), "precepts")),
+				new(OpCodes.Callvirt, AccessTools.Method(typeof(List<Precept>), "get_Count", new Type[] { })),
+				new(OpCodes.Blt_S),
 			};
 
 			var matcher = new CodeMatcher(instructions);

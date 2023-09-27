@@ -1,4 +1,6 @@
-﻿using HarmonyLib;
+﻿#nullable enable
+
+using HarmonyLib;
 using Verse;
 
 namespace PerformancePatches
