@@ -4,6 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using Extensions;
+using HotSwap;
 using Iterator;
 using RimWorld;
 using UnityEngine;
@@ -14,30 +17,36 @@ namespace PerformancePatches.Hediffs
 	[StaticConstructorOnStartup]
 	internal static class Manager
 	{
-		private static readonly Dictionary<Pawn_HealthTracker, Instanced> s_trackers = new();
+		private static readonly Dictionary<Type, bool> s_cachedCompsToSkip = new();
 
-		public static void InvalidateCache(bool force = false)
+		private static readonly ConditionalWeakTable<Pawn_HealthTracker, Instanced> s_trackers = new();
+
+		static Manager()
 		{
-			if (force) {
-				s_trackers.Clear();
-				return;
+			DefDatabase<HediffDef>.AllDefsListForReading
+				.FilterMap(x => x.comps)
+				.Flatten()
+				.FilterMap(x => x.compClass)
+				.Distinct()
+				.ForEach(x => CacheComp(x));
+		}
+
+		public static bool CanSkipComp(HediffComp comp)
+		{
+			var type = comp.GetType();
+			if (!s_cachedCompsToSkip.TryGetValue(type, out bool skip)) {
+				skip = CacheComp(type);
 			}
 
-			var existing = Utils.AllPawnsTicking()
-				.Select((pawn) => pawn.health)
-				.ToHashSet();
-			if (existing.Any()) {
-				var missing = s_trackers.Keys
-					.Where((k) => !existing.Contains(k))
-					.ToList();
-				foreach (var tracker in missing) {
-					s_trackers.Remove(tracker);
-				}
-				foreach (var tracker in s_trackers.Values) {
-					tracker.Invalidate();
-				}
+			return skip;
+		}
+
+		public static string DebugStringFor(Pawn_HealthTracker tracker, Hediff hediff)
+		{
+			if (s_trackers.TryGetValue(tracker, out var instance)) {
+				return instance.DebugStringFor(hediff);
 			} else {
-				s_trackers.Clear();
+				return string.Empty;
 			}
 		}
 
@@ -57,74 +66,65 @@ namespace PerformancePatches.Hediffs
 
 			instance.Tick();
 		}
+
+		private static bool CacheComp(Type comp)
+		{
+			bool skip = comp
+				.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+				.Filter(x => x.Name switch {
+					"CompPostPostRemoved" => true,
+					"CompPostTick" => true,
+					_ => false,
+				})
+				.All(x => {
+					const byte RET = 0x2A;
+					byte[] il = x.GetMethodBody().GetILAsByteArray();
+					return il.Length == 1 && il[0] == RET;
+				});
+			s_cachedCompsToSkip[comp] = skip;
+			return skip;
+		}
 	}
 
 	internal class Instanced
 	{
-		private static readonly Assembly s_vanillaAssembly = typeof(Hediff).Assembly;
+		private readonly Utils.WeakReference<Pawn_HealthTracker> _tracker;
 
-		private readonly HediffCache _hediffs = new();
-
-		private readonly Pawn _pawn;
-
-		private readonly Pawn_HealthTracker _tracker;
-
-		private float _bleedRate = 0;
+		private List<Hediff> _always = new();
 
 		private bool _dirty = true;
 
-		private int _lastRareTicked = -1;
+		private List<Hediff> _rarely = new();
 
-		public Instanced(Pawn_HealthTracker tracker)
+		public Instanced(Pawn_HealthTracker tracker) => this._tracker = new(tracker);
+
+		private IReadOnlyList<Hediff> AllHediffs => this.Tracker.hediffSet.hediffs;
+
+		private float BleedRateTotal => this.Tracker.hediffSet.BleedRateTotal;
+
+		private bool Dead => this.Tracker.Dead;
+
+		private bool IsFlesh => this.Pawn.RaceProps.IsFlesh;
+
+		private Pawn Pawn => this.Tracker.pawn;
+
+		private Pawn_HealthTracker Tracker => this._tracker.Target!;
+
+		public string DebugStringFor(Hediff hediff)
 		{
-			this._tracker = tracker;
-			this._pawn = tracker.pawn;
+			string prefix = this._rarely.Contains(hediff) ? "Suppressed" : "Actively";
+			return $"--{prefix} ticking";
 		}
 
-		internal enum TickType
-		{
-			Always,
-
-			Rarely,
-		}
-
-		private IEnumerable<Hediff> AllHediffs {
-			get {
-				this.RecalculateIfNeeded();
-				return this._hediffs.TickAlways.Concat(this._hediffs.TickRarely);
-			}
-		}
-
-		private float BleedRateTotal => this._bleedRate;
-
-		private bool Dead => this._tracker.Dead;
-
-		private IList<Hediff> Hediffs {
-			get {
-				this.RecalculateIfNeeded();
-				return this._hediffs.TickAlways;
-			}
-		}
-
-		private bool IsFlesh => this._pawn.RaceProps.IsFlesh;
-
-		private IList<Hediff> RareHediffs {
-			get {
-				this.RecalculateIfNeeded();
-				return this._hediffs.TickRarely;
-			}
-		}
-
-		public void Invalidate()
-		{
-			this._dirty = true;
-		}
+		public void Invalidate() => this._dirty = true;
 
 		public void Tick()
 		{
 			if (this.Dead) {
 				return;
 			}
+
+			this.RecalculateIfNeeded();
 
 			this.TickHediffs();
 			this.RemoveHediffs();
@@ -137,7 +137,7 @@ namespace PerformancePatches.Hediffs
 			this.TickHealing();
 			this.TickBleeding();
 
-			if (this._pawn.IsHashIntervalTick(60)) {
+			if (this.Pawn.IsHashIntervalTick(60)) {
 				if (this.TickGivers()) {
 					this.TickStory();
 				}
@@ -146,14 +146,15 @@ namespace PerformancePatches.Hediffs
 
 		private bool HasHediffsNeedingTendByPlayer()
 		{
-			if (this.AllHediffs.Any((x) => x.TendableNow())) {
-				if (this._pawn.NonHumanlikeOrWildMan()) {
-					if (this._pawn.Faction == Faction.OfPlayer) {
+			if (this.AllHediffs.Any(x => x.TendableNow())) {
+				var pawn = this.Pawn;
+				if (pawn.NonHumanlikeOrWildMan()) {
+					if (pawn.Faction == Faction.OfPlayer) {
 						return true;
-					} else if (this._pawn.CurrentBed()?.Faction == Faction.OfPlayer) {
+					} else if (pawn.CurrentBed()?.Faction == Faction.OfPlayer) {
 						return true;
 					}
-				} else if (this._pawn.HostFaction == Faction.OfPlayer || this._pawn.Faction == Faction.OfPlayer) {
+				} else if ((pawn.Faction == Faction.OfPlayer && pawn.HostFaction == null) || pawn.HostFaction == Faction.OfPlayer) {
 					return true;
 				}
 			}
@@ -161,80 +162,60 @@ namespace PerformancePatches.Hediffs
 			return false;
 		}
 
-		private void RecalculateBleedRate()
-		{
-			if (!this.IsFlesh || this.Dead || this._pawn.Deathresting) {
-				this._bleedRate = 0;
-			} else {
-				float factor = 1;
-				float rate = 0;
-				foreach (var hediff in this._tracker.hediffSet.hediffs) {
-					factor *= hediff.CurStage?.totalBleedFactor ?? 1;
-					rate += hediff.BleedRate;
-				}
-				this._bleedRate = rate * factor / this._pawn.HealthScale;
-			}
-		}
-
 		private void RecalculateHediffs()
 		{
-			this._hediffs.Clear();
-			var hediffs = this._tracker.hediffSet.hediffs;
-			var filter = hediffs
-					.ToLookup((x) => {
-						if (x.GetType().Assembly != s_vanillaAssembly) {
-							return TickType.Always;
-						} else if (x.def.AlwaysAllowMothball || x.IsPermanent()) {
-							return TickType.Rarely;
-						} else if (x is Hediff_MissingPart missing) {
-							return missing.Bleeding ? TickType.Always : TickType.Rarely;
-						} else {
-							return TickType.Always;
-						}
-					});
-			foreach (TickType type in Enum.GetValues(typeof(TickType))) {
-				this._hediffs[type].AddRange(filter[type]);
-			}
+			var vanilla = typeof(Hediff).Assembly;
+			(this._rarely, this._always) = this.AllHediffs
+				.Partition(x => {
+					if (x.GetType().Assembly == vanilla && !x.Bleeding) {
+						return x switch {
+							Hediff_MissingPart missing => !missing.IsFreshNonSolidExtremity,
+							HediffWithComps comps => comps.comps.All(x => Manager.CanSkipComp(x)),
+							_ => false,
+						};
+					} else {
+						return false;
+					}
+				});
 		}
 
 		private void RecalculateIfNeeded()
 		{
 			if (this._dirty) {
 				this.RecalculateHediffs();
-				this.RecalculateBleedRate();
-				this._lastRareTicked = UnityEngine.Random.Range(0, this._hediffs.TickRarely.Count) - 1;
 				this._dirty = false;
 			}
 		}
 
 		private void RemoveHediffs()
 		{
-			foreach (var hediff in this.AllHediffs) {
+			foreach (var hediff in this._always) {
 				if (hediff.ShouldRemove) {
-					this._tracker.RemoveHediff(hediff);
+					this.Tracker.RemoveHediff(hediff);
 				}
 			}
 		}
 
 		private void TickBleeding()
 		{
-			if (this.IsFlesh && this.BleedRateTotal >= 0.1f) {
-				float bleeding = this.BleedRateTotal * this._pawn.BodySize;
-				bleeding *= (this._pawn.GetPosture() == PawnPosture.Standing) ? 0.004f : 0.0004f;
+			if (this.IsFlesh && this.BleedRateTotal >= 1e-1f) {
+				float bleeding = this.BleedRateTotal * this.Pawn.BodySize;
+				bleeding *= (this.Pawn.GetPosture() == PawnPosture.Standing) ? 4e-3f : 4e-4f;
 				if (Rand.Value < bleeding) {
-					this._tracker.DropBloodFilth();
+					this.Tracker.DropBloodFilth();
 				}
 			}
 		}
 
 		private bool TickGivers()
 		{
-			return this._pawn
+			return this.Pawn
 				.RaceProps
 				.hediffGiverSets?
-				.SelectMany((x) => x.hediffGivers)
-				.All((x) => {
-					x.OnIntervalPassed(this._pawn, null);
+				.Map(x => x.hediffGivers)
+				.Flatten()
+				.All(x => {
+					x.OnIntervalPassed(this.Pawn, null);
 					return !this.Dead;
 				})
 				?? true;
@@ -242,57 +223,58 @@ namespace PerformancePatches.Hediffs
 
 		private void TickHealing()
 		{
-			if (this.IsFlesh && this._pawn.IsHashIntervalTick(600) && !this._pawn.Starving()) {
-				float healingFactor = this._pawn.GetStatValue(StatDefOf.InjuryHealingFactor) * 0.01f * this._pawn.HealthScale;
-				var injuries = this.AllHediffs.FilterMap((x) => x as Hediff_Injury);
+			var pawn = this.Pawn;
+			if (this.IsFlesh && pawn.IsHashIntervalTick(600) && !pawn.Starving()) {
+				float healingFactor = pawn.GetStatValue(StatDefOf.InjuryHealingFactor) * 0.01f * pawn.HealthScale;
+				var injuries = this.AllHediffs.FilterMap(x => x as Hediff_Injury);
 				bool healed = false;
-				healed = this.TickNaturalHealing(healingFactor, injuries.Where((x) => x.CanHealNaturally())) || healed;
-				healed = this.TickTendedHealing(healingFactor, injuries.Where((x) => x.CanHealFromTending())) || healed;
+				healed = this.TickNaturalHealing(
+					healingFactor,
+					injuries.Filter(x => x.CanHealNaturally()).ToList()) || healed;
+				healed = this.TickTendedHealing(
+					healingFactor,
+					injuries.Filter(x => x.CanHealFromTending() && x.Severity > 0).ToList()) || healed;
 				if (healed &&
 					!this.HasHediffsNeedingTendByPlayer() &&
-					!HealthAIUtility.ShouldSeekMedicalRest(this._pawn) &&
-					PawnUtility.ShouldSendNotificationAbout(this._pawn)) {
-					Messages.Message("MessageFullyHealed".Translate(this._pawn.LabelCap, this._pawn), this._pawn, MessageTypeDefOf.PositiveEvent);
+					!HealthAIUtility.ShouldSeekMedicalRest(pawn) &&
+					PawnUtility.ShouldSendNotificationAbout(pawn)) {
+					Messages.Message("MessageFullyHealed".Translate(pawn.LabelCap, pawn), pawn, MessageTypeDefOf.PositiveEvent);
 				}
-			}
-		}
-
-		private bool TickHediff(Hediff hediff)
-		{
-			try {
-				hediff.Tick();
-				hediff.PostTick();
-				return true;
-			} catch (Exception e) {
-				Log.Error($"Exception ticking hediff {hediff.ToStringSafe()} for pawn {this._pawn.ToStringSafe()}. Removing hediff... Exception: {e}");
-				try {
-					this._tracker.RemoveHediff(hediff);
-				} catch (Exception e2) {
-					Log.Error($"Error while removing hediff: {e2}");
-				}
-				return false;
 			}
 		}
 
 		private void TickHediffs()
 		{
-			this.Hediffs.All(this.TickHediff);
-			this.TickRareHediffs();
+			foreach (var hediff in this._always) {
+				try {
+					hediff.Tick();
+					hediff.PostTick();
+				} catch (Exception inner) {
+					Log.Error($"Exception ticking hediff {hediff.ToStringSafe()} for pawn {this.Pawn.ToStringSafe()}. Removing hediff... Exception: {inner}");
+					try {
+						this.Tracker.RemoveHediff(hediff);
+					} catch (Exception outer) {
+						Log.Error($"Error while removing hediff: {outer}");
+					}
+				}
+			}
+
+			foreach (var rare in this._rarely) {
+				rare.ageTicks += 1;
+			}
 		}
 
-		private void TickImmunity()
-		{
-			this._tracker.immunity.ImmunityHandlerTick();
-		}
+		private void TickImmunity() => this.Tracker.immunity.ImmunityHandlerTick();
 
-		private bool TickNaturalHealing(float healingFactor, IEnumerable<Hediff_Injury> injuries)
+		private bool TickNaturalHealing(float healingFactor, IReadOnlyCollection<Hediff_Injury> injuries)
 		{
-			if (injuries.Any()) {
+			if (!injuries.IsEmptyRO()) {
 				float healing = 8;
 
-				if (this._pawn.GetPosture() != PawnPosture.Standing) {
+				var pawn = this.Pawn;
+				if (pawn.GetPosture() != PawnPosture.Standing) {
 					healing += 4;
-					healing += this._pawn.CurrentBed()?.def.building.bed_healPerDay ?? 0;
+					healing += pawn.CurrentBed()?.def.building.bed_healPerDay ?? 0;
 				}
 
 				foreach (var hediff in this.AllHediffs) {
@@ -302,87 +284,61 @@ namespace PerformancePatches.Hediffs
 					}
 				}
 
-				injuries.RandomElement().Heal(healing * healingFactor);
+				injuries.Choice()!.Heal(healing * healingFactor);
 				return true;
 			} else {
 				return false;
 			}
 		}
 
-		private void TickRareHediffs()
-		{
-			var rare = this.RareHediffs;
-			if (rare.Count > 0) {
-				rare.ForEach((x) => x.ageTicks += 1);
-				this._lastRareTicked = (this._lastRareTicked + 1) % rare.Count;
-				var hediff = rare[this._lastRareTicked];
-				hediff.ageTicks -= 1;
-				this.TickHediff(hediff);
-			}
-		}
-
 		private void TickStory()
 		{
-			this._pawn
+			var pawn = this.Pawn;
+			pawn
 				.story?
 				.traits
 				.allTraits
-				.Where((x) => !x.Suppressed)
-				.FilterMap((trait) => {
+				.Filter(x => !x.Suppressed)
+				.FilterMap(trait => {
 					float mtb = trait.CurrentData.randomDiseaseMtbDays;
-					if (mtb > 0f && Rand.MTBEventOccurs(mtb, 60000, 60)) {
-						var biome = this._pawn.Tile != -1 ? Find.WorldGrid[this._pawn.Tile].biome : DefDatabase<BiomeDef>.GetRandom();
+					if (mtb > 0f && Rand.MTBEventOccurs(mtb, GenDate.TicksPerDay, 60)) {
+						var biome = pawn.Tile != -1 ? Find.WorldGrid[pawn.Tile].biome : DefDatabase<BiomeDef>.AllDefsListForReading.Choice()!;
 						return DefDatabase<IncidentDef>.AllDefs
-							.Where((x) => x.category == IncidentCategoryDefOf.DiseaseHuman)
-							.RandomElementByWeightWithFallback((x) => biome.CommonalityOfDisease(x));
+							.Filter(x => x.category == IncidentCategoryDefOf.DiseaseHuman)
+							.RandomElementByWeightWithFallback(x => biome.CommonalityOfDisease(x));
 					} else {
 						return null;
 					}
 				})
-				.ForEach((incident) => {
+				.ForEach(incident => {
 					bool applied = ((IncidentWorker_Disease)incident.Worker)
-						.ApplyToPawns(Gen.YieldSingle(this._pawn), out string blockedInfo)
+						.ApplyToPawns(Iter.Once(pawn), out string blockedInfo)
 						.Count == 1;
-					if (PawnUtility.ShouldSendNotificationAbout(this._pawn)) {
+					if (PawnUtility.ShouldSendNotificationAbout(pawn)) {
 						if (applied) {
 							Find.LetterStack.ReceiveLetter(
 								"LetterLabelTraitDisease".Translate(incident.diseaseIncident.label),
-								"LetterTraitDisease".Translate(this._pawn.LabelCap, incident.diseaseIncident.label, this._pawn.Named("PAWN"))
-									.AdjustedFor(this._pawn),
+								"LetterTraitDisease".Translate(pawn.LabelCap, incident.diseaseIncident.label, pawn.Named("PAWN"))
+									.AdjustedFor(pawn),
 								LetterDefOf.NegativeEvent,
-								this._pawn);
-						} else if (!blockedInfo.NullOrEmpty()) {
-							Messages.Message(blockedInfo, this._pawn, MessageTypeDefOf.NeutralEvent);
+								pawn);
+						} else if (!blockedInfo.IsEmpty()) {
+							Messages.Message(blockedInfo, pawn, MessageTypeDefOf.NeutralEvent);
 						}
 					}
 				});
 		}
 
-		private bool TickTendedHealing(float healingFactor, IEnumerable<Hediff_Injury> injuries)
+		private bool TickTendedHealing(float healingFactor, IReadOnlyCollection<Hediff_Injury> injuries)
 		{
-			if (injuries.Any() && !this._pawn.Starving()) {
-				var injury = injuries.RandomElement();
+			if (!injuries.IsEmptyRO() && !this.Pawn.Starving()) {
+				var injury = injuries.Choice()!;
 				float quality = injury.TryGetComp<HediffComp_TendDuration>().tendQuality;
 				float healing = GenMath.LerpDouble(0f, 1f, 0.5f, 1.5f, Mathf.Clamp01(quality));
 				injury.Heal(8f * healing * healingFactor);
 				return true;
 			} else {
 				return false;
-			}
-		}
-
-		internal class HediffCache
-		{
-			public readonly List<Hediff> TickAlways = new();
-
-			public readonly List<Hediff> TickRarely = new();
-
-			public List<Hediff> this[TickType key] => key == TickType.Rarely ? this.TickRarely : this.TickAlways;
-
-			public void Clear()
-			{
-				this.TickAlways.Clear();
-				this.TickRarely.Clear();
 			}
 		}
 	}

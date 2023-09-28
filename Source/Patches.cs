@@ -15,7 +15,6 @@ namespace PerformancePatches
 	{
 		public static void Prefix()
 		{
-			Hediffs.Manager.InvalidateCache(true);
 			Precepts.Manager.InvalidateCache(true);
 		}
 	}
@@ -28,7 +27,6 @@ namespace PerformancePatches
 		public static void Postfix()
 		{
 			if ((Find.TickManager.TicksGame % GenDate.TicksPerDay) == 0) {
-				Hediffs.Manager.InvalidateCache();
 				Precepts.Manager.InvalidateCache();
 			}
 		}
