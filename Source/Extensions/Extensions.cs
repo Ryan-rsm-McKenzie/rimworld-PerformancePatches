@@ -18,5 +18,10 @@ namespace Extensions
 				return null;
 			}
 		}
+
+		public static List<T> Clone<T>(this IReadOnlyList<T> self)
+		{
+			return new List<T>(self);
+		}
 	}
 }

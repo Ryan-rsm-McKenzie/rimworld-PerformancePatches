@@ -6,7 +6,6 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Extensions;
-using HotSwap;
 using Iterator;
 using RimWorld;
 using UnityEngine;
@@ -19,6 +18,8 @@ namespace PerformancePatches.Hediffs
 	{
 		private static readonly Dictionary<Type, bool> s_cachedCompsToSkip = new();
 
+		private static readonly Dictionary<Type, bool> s_cachedHediffsToSkip = new();
+
 		private static readonly ConditionalWeakTable<Pawn_HealthTracker, Instanced> s_trackers = new();
 
 		static Manager()
@@ -29,6 +30,10 @@ namespace PerformancePatches.Hediffs
 				.FilterMap(x => x.compClass)
 				.Distinct()
 				.ForEach(x => CacheComp(x));
+			DefDatabase<HediffDef>.AllDefsListForReading
+				.FilterMap(x => x.hediffClass)
+				.Distinct()
+				.ForEach(x => CacheHediff(x));
 		}
 
 		public static bool CanSkipComp(HediffComp comp)
@@ -36,6 +41,16 @@ namespace PerformancePatches.Hediffs
 			var type = comp.GetType();
 			if (!s_cachedCompsToSkip.TryGetValue(type, out bool skip)) {
 				skip = CacheComp(type);
+			}
+
+			return skip;
+		}
+
+		public static bool CanSkipHediff(Hediff hediff)
+		{
+			var type = hediff.GetType();
+			if (!s_cachedHediffsToSkip.TryGetValue(type, out bool skip)) {
+				skip = CacheHediff(type);
 			}
 
 			return skip;
@@ -71,17 +86,46 @@ namespace PerformancePatches.Hediffs
 		{
 			bool skip = comp
 				.GetMethods(BindingFlags.Instance | BindingFlags.Public)
-				.Filter(x => x.Name switch {
-					"CompPostPostRemoved" => true,
-					"CompPostTick" => true,
-					_ => false,
-				})
+				.Filter(x =>
+					x.IsVirtual &&
+					x.GetParameters().Length == 0 &&
+					x.Name switch {
+						"CompPostTick" => true,
+						_ => false,
+					})
 				.All(x => {
 					const byte RET = 0x2A;
 					byte[] il = x.GetMethodBody().GetILAsByteArray();
 					return il.Length == 1 && il[0] == RET;
 				});
 			s_cachedCompsToSkip[comp] = skip;
+			return skip;
+		}
+
+		private static bool CacheHediff(Type hediff)
+		{
+			bool skip = hediff
+				.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+				.Filter(x => x.IsVirtual && x.GetParameters().Length == 0)
+				.All(x => {
+					var methods = x.Name switch {
+						"Tick" => new MethodInfo[] { typeof(Hediff).GetMethod("Tick", new Type[] { }) },
+						"PostTick" => new MethodInfo[] {
+							typeof(Hediff).GetMethod("PostTick", new Type[] { }),
+							typeof(HediffWithComps).GetMethod("PostTick", new Type[] { }),
+						},
+						_ => new MethodInfo[] { },
+					};
+
+					if (methods.IsEmpty()) {
+						return true;
+					} else {
+						byte[] il = x.GetMethodBody().GetILAsByteArray();
+						return methods.Any(x => x.GetMethodBody().GetILAsByteArray().SequenceEqual(il));
+					}
+				});
+
+			s_cachedHediffsToSkip[hediff] = skip;
 			return skip;
 		}
 	}
@@ -164,15 +208,12 @@ namespace PerformancePatches.Hediffs
 
 		private void RecalculateHediffs()
 		{
-			var vanilla = typeof(Hediff).Assembly;
 			(this._rarely, this._always) = this.AllHediffs
 				.Partition(x => {
-					if (x.GetType().Assembly == vanilla && !x.Bleeding) {
-						return x switch {
-							Hediff_MissingPart missing => !missing.IsFreshNonSolidExtremity,
-							HediffWithComps comps => comps.comps.All(x => Manager.CanSkipComp(x)),
-							_ => false,
-						};
+					if (x is Hediff_MissingPart missing) {
+						return !missing.Bleeding && !missing.IsFreshNonSolidExtremity;
+					} else if ((x.def.stages?.IsEmpty() ?? true) && (x.def.hediffGivers?.IsEmpty() ?? true)) {
+						return Manager.CanSkipHediff(x) && ((x as HediffWithComps)?.comps.All(Manager.CanSkipComp) ?? true);
 					} else {
 						return false;
 					}
@@ -189,7 +230,7 @@ namespace PerformancePatches.Hediffs
 
 		private void RemoveHediffs()
 		{
-			foreach (var hediff in this._always) {
+			foreach (var hediff in this.AllHediffs.Clone()) {
 				if (hediff.ShouldRemove) {
 					this.Tracker.RemoveHediff(hediff);
 				}
