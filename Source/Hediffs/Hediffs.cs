@@ -88,7 +88,7 @@ namespace PerformancePatches.Hediffs
 				.GetMethods(BindingFlags.Instance | BindingFlags.Public)
 				.Filter(x =>
 					x.IsVirtual &&
-					x.GetParameters().Length == 0 &&
+					x.GetParameters().Length == 1 &&
 					x.Name switch {
 						"CompPostTick" => true,
 						_ => false,
